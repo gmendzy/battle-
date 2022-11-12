@@ -1,5 +1,6 @@
 import pygame
 import random
+import button2
 
 pygame.init()
 
@@ -20,13 +21,14 @@ action_cooldown = 0
 action_wait_time = 90
 attack = False
 potion = False
+potion_effect = 15
 clicked = False
 game_over = 0 
 
 
 
 #font
-font = pygame.font.Font('C:\projects\Python\AncientModernTales.ttf.ttf', 26)
+font = pygame.font.Font('C:\projects\Python\AncientModernTales.ttf', 26)
 
 #define colors
 red = (255, 0, 0)
@@ -43,6 +45,9 @@ panel_img = pygame.image.load('battle/img/icons/panel.png').convert_alpha()
 
 #cursor image
 cursor_img = pygame.image.load('battle/img/icons/cursor.png').convert_alpha()
+
+#potion image
+potion_img = pygame.image.load('battle/img/icons/potion.png').convert_alpha()
 
 #drawing text
 def draw_text(text, font, text_col, x, y):
@@ -131,9 +136,11 @@ class Player():
         if target.hp < 1:
             target.hp = 0
             target.alive = False
+        damage_text = DamageText(target.rect.centerx, target.rect.y, str(damage), red)
+        damage_text_group.add(damage_text)
         #set variables to attack animation
         self.action = 1
-        self.fram_index = 0
+        self.frame_index = 0
         self.update_time = pygame.time.get_ticks()
 
 
@@ -158,6 +165,24 @@ class Healthbar():
         ratio = self.hp / self.max_hp
         pygame.draw.rect(screen, red, (self.x, self.y, 150, 20))
         pygame.draw.rect(screen, green, (self.x, self.y, 150 * ratio, 20))
+
+class DamageText(pygame.sprite.Sprite):
+    def __init__(self, x, y, damage, color):
+        pygame.sprite.Sprite.__init__(self)
+        self.image = font.render(damage, True, color)
+        self.rect = self.image.get_rect()
+        self.rect.center = (x, y)
+        self.counter = 0
+
+    def update(self):
+        #move damage text up 
+        self.rect.y -= 1
+        #delete text after a few seconds
+        self.counter += 1
+        if self.counter > 30:
+            self.kill()
+
+damage_text_group = pygame.sprite.Group()      
         
 
 
@@ -172,6 +197,8 @@ bandit_list.append(bandit1)
 knight_health_bar = Healthbar(100, screen_height - bottom_panel + 40, knight.hp, knight.max_hp)
 bandit1_health_bar = Healthbar(550, screen_height - bottom_panel + 40, bandit1.hp, bandit1.max_hp)
 
+potion_button = button2.Button(screen, 100, screen_height - bottom_panel + 70, potion_img, 64, 64)
+
 
 run = True
 while run:
@@ -182,7 +209,7 @@ while run:
     draw_bg()
 
     #draw_panel
-    draw_panel()
+    draw_panel()    
     knight_health_bar.draw(knight.hp)
     bandit1_health_bar.draw(bandit1.hp)
 
@@ -192,6 +219,11 @@ while run:
     for bandit in bandit_list:
         bandit.update()
         bandit.draw()
+
+    #draw damage text
+    damage_text_group.update()
+    damage_text_group.draw(screen)
+
     #control player input
     #reset action variables
     attack = False
@@ -210,7 +242,10 @@ while run:
                 attack = True
                 target = bandit_list[count]
 
-
+    if potion_button.draw():
+        potion = True
+    #show number of potions remaining
+    draw_text(str(knight.potions), font, red, 150, screen_height - bottom_panel + 70)
 
     #player action
     if knight.alive == True:
@@ -223,6 +258,22 @@ while run:
                     knight.attack(target)
                     current_fighter += 1
                     action_cooldown = 0
+                #potion
+                if potion == True:
+                    if knight.potions > 0:
+                        #check if potion would heal player beyond max hp
+                        if knight.max_hp - knight.hp > potion_effect :
+                            heal_amount = potion_effect 
+                        else: 
+                            heal_amount = knight.max_hp - knight.hp
+                        knight.hp += heal_amount
+                        knight.potions -= 1
+                        damage_text = DamageText(knight.rect.centerx, knight.rect.y, str(heal_amount), green)
+                        damage_text_group.add(damage_text)
+                        current_fighter += 1
+                        action_cooldown = 0
+
+
 
     #enemy action
     for count, bandit in enumerate(bandit_list):
@@ -230,7 +281,7 @@ while run:
             if bandit.alive == True:
                 action_cooldown += 1
                 if action_cooldown >= action_wait_time:
-
+                    #attack
                     bandit.attack(knight)
                     current_fighter += 1
                     action_cooldown = 0
